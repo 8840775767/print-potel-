@@ -1,0 +1,1288 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>जन सेवा केंद्र - ऑल-इन-वन कार्ड व फोटो प्रिंटर टूल</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Cropper.js for image cropping -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#4f46e5',
+              600: '#4338ca',
+              700: '#3730a3',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Devanagari:wght@400;600;700&display=swap');
+    
+    body {
+      font-family: 'Inter', 'Noto Sans Devanagari', sans-serif;
+    }
+
+    /* Standard A4 Paper in millimeters */
+    .a4-sheet-preview {
+      width: 210mm;
+      min-height: 297mm;
+      background: #ffffff;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+      margin: 0 auto;
+      padding: 10mm;
+      box-sizing: border-box;
+      position: relative;
+    }
+
+    /* Fixed Standard Government ID Card Size (85.6mm x 54mm) */
+    .id-card-box {
+      width: 85.6mm;
+      height: 54mm;
+      box-sizing: border-box;
+    }
+
+    /* Standard Passport Size (35mm x 45mm) */
+    .passport-box {
+      width: 35mm;
+      height: 45mm;
+      box-sizing: border-box;
+    }
+
+    .dashed-border {
+      border: 2px dashed #cbd5e1;
+    }
+
+    /* ===================================================
+       BULLETPROOF PRINT RULES
+       =================================================== */
+    @page {
+      size: A4 portrait;
+      margin: 8mm;
+    }
+
+    @media print {
+      /* Reset root layout that could clip or hide print area */
+      html, body {
+        width: 100% !important;
+        height: auto !important;
+        min-height: 100% !important;
+        overflow: visible !important;
+        background: #ffffff !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        color: #000000 !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+
+      /* Hide everything by default */
+      header, main, nav, footer, .no-print, #editor-modal, #toast, .action-buttons {
+        display: none !important;
+        visibility: hidden !important;
+      }
+
+      /* Only reveal and elevate the print container */
+      #print-area {
+        display: block !important;
+        visibility: visible !important;
+        position: static !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-height: auto !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        box-shadow: none !important;
+        border: none !important;
+        background: transparent !important;
+      }
+
+      #print-area * {
+        visibility: visible !important;
+      }
+
+      .page-break {
+        page-break-before: always;
+      }
+    }
+  </style>
+</head>
+
+<body class="bg-slate-100 min-h-screen flex flex-col text-slate-800">
+
+  <!-- Top Navigation / Toolbar -->
+  <header class="bg-slate-900 text-white shadow-lg sticky top-0 z-40 no-print">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap justify-between items-center gap-3">
+      <div class="flex items-center space-x-3">
+        <div class="bg-indigo-600 text-white p-2.5 rounded-xl shadow">
+          <i class="fa-solid fa-print text-xl"></i>
+        </div>
+        <div>
+          <h1 class="text-lg sm:text-xl font-bold tracking-tight text-white flex items-center gap-2">
+            जन सेवा केंद्र <span class="text-xs bg-emerald-500 text-white px-2 py-0.5 rounded-full font-semibold">100% Guaranteed Print</span>
+          </h1>
+          <p class="text-xs text-slate-300">WhatsApp Paste (Ctrl+V) • Standard PVC (85.6x54mm) • Passport Photos</p>
+        </div>
+      </div>
+
+      <!-- Action Buttons with direct print and popup window fallback -->
+      <div class="flex flex-wrap items-center gap-2">
+        <button onclick="triggerDirectPrint()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl shadow-md flex items-center gap-2 text-xs sm:text-sm transition active:scale-95">
+          <i class="fa-solid fa-print text-base"></i>
+          <span>डायरेक्ट प्रिंट (Ctrl + P)</span>
+        </button>
+
+        <button onclick="openPrintWindow()" class="bg-blue-600 hover:bg-blue-500 text-white font-medium px-3.5 py-2 rounded-xl shadow flex items-center gap-1.5 text-xs sm:text-sm transition active:scale-95" title="अगर नॉर्मल प्रिंट बटन न खुले तो इसे दबाएं">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i>
+          <span>नए टैब में प्रिंट करें</span>
+        </button>
+
+        <button onclick="downloadSheetImage()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 font-medium px-3 py-2 rounded-xl text-xs sm:text-sm transition flex items-center gap-1.5" title="फोटो फाइल डाउनलोड करें">
+          <i class="fa-solid fa-download"></i>
+          <span class="hidden sm:inline">डाउनलोड</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Sub-bar Helper Notification -->
+    <div class="bg-slate-800 border-t border-slate-700/70 px-4 py-1.5 text-xs text-slate-300">
+      <div class="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-2">
+        <span class="text-emerald-400 font-medium flex items-center gap-1.5">
+          <i class="fa-brands fa-whatsapp text-sm"></i> WhatsApp से फोटो कॉपी करके सीधे कीबोर्ड पर <kbd class="px-1.5 py-0.5 bg-slate-700 rounded border border-slate-600 text-white">Ctrl + V</kbd> दबाएं!
+        </span>
+        <span class="text-slate-400">
+          <i class="fa-solid fa-circle-info text-amber-400 mr-1"></i> प्रिंटर सेटिंग्स में <b>Paper: A4</b> और <b>Scale: 100% / Fit to Printable</b> रखें।
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 no-print">
+    
+    <!-- LEFT PANEL: Controls, uploads, configurations -->
+    <div class="lg:col-span-5 flex flex-col gap-4">
+      
+      <!-- Module Selection Tabs -->
+      <div class="bg-white p-1.5 rounded-2xl shadow-sm border border-slate-200 grid grid-cols-3 gap-1 text-center font-semibold text-xs">
+        <button id="tab-idcard" onclick="switchMode('idcard')" class="py-2.5 px-2 rounded-xl transition bg-indigo-600 text-white shadow">
+          <i class="fa-solid fa-address-card mr-1"></i> आधार / ID कार्ड
+        </button>
+        <button id="tab-passport" onclick="switchMode('passport')" class="py-2.5 px-2 rounded-xl transition text-slate-600 hover:bg-slate-100">
+          <i class="fa-solid fa-user mr-1"></i> पासपोर्ट फोटो
+        </button>
+        <button id="tab-document" onclick="switchMode('document')" class="py-2.5 px-2 rounded-xl transition text-slate-600 hover:bg-slate-100">
+          <i class="fa-solid fa-file-invoice mr-1"></i> A4 दस्तावेज
+        </button>
+      </div>
+
+      <!-- ================= SECTION 1: ID CARD ================= -->
+      <div id="section-idcard" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-5 space-y-4">
+        <div class="flex items-center justify-between border-b pb-2.5">
+          <h2 class="font-bold text-slate-800 text-sm sm:text-base flex items-center gap-2">
+            <span class="w-2.5 h-2.5 bg-indigo-600 rounded-full"></span>
+            आधार / पैन / वोटर कार्ड सेटअप
+          </h2>
+          <span class="text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded font-mono font-medium">85.6 x 54 mm</span>
+        </div>
+
+        <!-- Front Side Dropzone -->
+        <div class="space-y-1.5">
+          <div class="flex justify-between items-center text-xs font-semibold text-slate-700">
+            <span><i class="fa-solid fa-id-badge text-indigo-500 mr-1"></i> १. आगे का हिस्सा (Front Side)</span>
+            <span id="front-status" class="text-slate-400 font-normal">खाली है</span>
+          </div>
+          <div id="front-dropzone" class="dashed-border rounded-xl p-3 text-center bg-slate-50 hover:bg-indigo-50/50 transition cursor-pointer relative group">
+            <input type="file" id="front-input" accept="image/*" class="hidden" onchange="handleFileSelect(event, 'front')">
+            <div id="front-placeholder" class="py-3 flex flex-col items-center justify-center">
+              <i class="fa-solid fa-cloud-arrow-up text-2xl text-indigo-400 group-hover:scale-110 transition"></i>
+              <p class="text-xs font-medium text-slate-700 mt-1">क्लिक करें या यहाँ Ctrl + V से पेस्ट करें</p>
+              <p class="text-[10px] text-slate-400">Aadhaar / PAN Front</p>
+            </div>
+            <div id="front-preview-container" class="hidden relative">
+              <img id="front-preview-thumb" src="" alt="Front Preview" class="h-24 mx-auto rounded object-contain bg-white shadow-sm border">
+              <div class="mt-2 flex justify-center gap-2">
+                <button onclick="openEditor('front')" class="text-xs bg-indigo-600 text-white px-3 py-1 rounded-lg hover:bg-indigo-700 flex items-center gap-1 shadow-sm">
+                  <i class="fa-solid fa-crop-simple"></i> क्रॉप व सीधा करें
+                </button>
+                <button onclick="removeImage('front')" class="text-xs bg-rose-50 text-rose-600 px-2.5 py-1 rounded-lg hover:bg-rose-100 flex items-center gap-1 border border-rose-200">
+                  <i class="fa-solid fa-trash"></i> हटाएं
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Back Side Dropzone -->
+        <div class="space-y-1.5">
+          <div class="flex justify-between items-center text-xs font-semibold text-slate-700">
+            <span><i class="fa-solid fa-id-badge text-emerald-500 mr-1"></i> २. पीछे का हिस्सा (Back Side)</span>
+            <span id="back-status" class="text-slate-400 font-normal">खाली है</span>
+          </div>
+          <div id="back-dropzone" class="dashed-border rounded-xl p-3 text-center bg-slate-50 hover:bg-emerald-50/50 transition cursor-pointer relative group">
+            <input type="file" id="back-input" accept="image/*" class="hidden" onchange="handleFileSelect(event, 'back')">
+            <div id="back-placeholder" class="py-3 flex flex-col items-center justify-center">
+              <i class="fa-solid fa-cloud-arrow-up text-2xl text-emerald-400 group-hover:scale-110 transition"></i>
+              <p class="text-xs font-medium text-slate-700 mt-1">क्लिक करें या यहाँ Ctrl + V से पेस्ट करें</p>
+              <p class="text-[10px] text-slate-400">Aadhaar / Voter Back</p>
+            </div>
+            <div id="back-preview-container" class="hidden relative">
+              <img id="back-preview-thumb" src="" alt="Back Preview" class="h-24 mx-auto rounded object-contain bg-white shadow-sm border">
+              <div class="mt-2 flex justify-center gap-2">
+                <button onclick="openEditor('back')" class="text-xs bg-indigo-600 text-white px-3 py-1 rounded-lg hover:bg-indigo-700 flex items-center gap-1 shadow-sm">
+                  <i class="fa-solid fa-crop-simple"></i> क्रॉप व सीधा करें
+                </button>
+                <button onclick="removeImage('back')" class="text-xs bg-rose-50 text-rose-600 px-2.5 py-1 rounded-lg hover:bg-rose-100 flex items-center gap-1 border border-rose-200">
+                  <i class="fa-solid fa-trash"></i> हटाएं
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Layout Controls -->
+        <div class="pt-2 border-t border-slate-100 space-y-2.5">
+          <div class="text-xs font-semibold text-slate-700">प्रिंट लेआउट (Layout on A4):</div>
+          <div class="grid grid-cols-2 gap-2 text-xs">
+            <label class="border rounded-xl p-2.5 flex items-center gap-2 cursor-pointer hover:bg-slate-50 transition border-indigo-200 bg-indigo-50/40">
+              <input type="radio" name="id-layout" value="horizontal" checked onchange="updateIdLayout(this.value)">
+              <span>आमने-सामने (Side-by-Side)</span>
+            </label>
+            <label class="border rounded-xl p-2.5 flex items-center gap-2 cursor-pointer hover:bg-slate-50 transition">
+              <input type="radio" name="id-layout" value="vertical" onchange="updateIdLayout(this.value)">
+              <span>ऊपर-नीचे (Stacked)</span>
+            </label>
+          </div>
+
+          <div class="flex items-center justify-between text-xs text-slate-600 pt-1">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="id-border-check" checked onchange="toggleIdBorder(this.checked)" class="rounded text-indigo-600 focus:ring-indigo-500">
+              <span>कटिंग गाइड बॉर्डर (Border for cutting)</span>
+            </label>
+            <button onclick="resetIdCards()" class="text-rose-500 hover:text-rose-600 text-xs font-medium">
+              <i class="fa-solid fa-rotate-left mr-1"></i>रीसेट करें
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= SECTION 2: PASSPORT PHOTOS ================= -->
+      <div id="section-passport" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-5 space-y-4 hidden">
+        <div class="flex items-center justify-between border-b pb-2.5">
+          <h2 class="font-bold text-slate-800 text-sm sm:text-base flex items-center gap-2">
+            <span class="w-2.5 h-2.5 bg-amber-500 rounded-full"></span>
+            पासपोर्ट साइज फोटो मेकर
+          </h2>
+          <span class="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded font-mono font-semibold">3.5 x 4.5 cm</span>
+        </div>
+
+        <div id="passport-dropzone" class="dashed-border rounded-xl p-4 text-center bg-slate-50 hover:bg-amber-50/40 transition cursor-pointer relative group">
+          <input type="file" id="passport-input" accept="image/*" class="hidden" onchange="handleFileSelect(event, 'passport')">
+          <div id="passport-placeholder" class="py-4 flex flex-col items-center justify-center">
+            <i class="fa-solid fa-camera-retro text-3xl text-amber-500 group-hover:scale-110 transition"></i>
+            <p class="text-xs font-semibold text-slate-700 mt-2">ग्राहक की फोटो यहाँ अपलोड या Ctrl+V से पेस्ट करें</p>
+            <p class="text-[10px] text-slate-400 mt-0.5">WhatsApp / फोन से आई फोटो</p>
+          </div>
+          <div id="passport-preview-container" class="hidden relative">
+            <img id="passport-preview-thumb" src="" alt="Passport Thumbnail" class="h-28 mx-auto rounded object-cover shadow border">
+            <div class="mt-2.5 flex justify-center gap-2">
+              <button onclick="openEditor('passport')" class="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 flex items-center gap-1 shadow-sm font-medium">
+                <i class="fa-solid fa-crop-simple"></i> फोटो क्रॉप व ब्राइटनेस बढ़ाएं
+              </button>
+              <button onclick="removeImage('passport')" class="text-xs bg-rose-50 text-rose-600 px-3 py-1.5 rounded-lg hover:bg-rose-100 flex items-center gap-1 border border-rose-200 font-medium">
+                <i class="fa-solid fa-trash"></i> बदलें
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Photo Quantity Selector -->
+        <div class="space-y-2">
+          <label class="text-xs font-semibold text-slate-700 block">कितनी फोटो निकालनी है? (Select Quantity):</label>
+          <div class="grid grid-cols-3 gap-2 text-xs font-medium">
+            <button onclick="setPassportCount(4)" class="passport-qty-btn border py-2 rounded-xl transition bg-slate-100 hover:bg-amber-50 border-slate-300" data-count="4">
+              4 फोटो (1 लाइन)
+            </button>
+            <button onclick="setPassportCount(6)" class="passport-qty-btn border py-2 rounded-xl transition bg-amber-500 text-white border-amber-600 shadow-sm font-semibold" data-count="6">
+              6 फोटो (1 लाइन)
+            </button>
+            <button onclick="setPassportCount(8)" class="passport-qty-btn border py-2 rounded-xl transition bg-slate-100 hover:bg-amber-50 border-slate-300" data-count="8">
+              8 फोटो (2 लाइन)
+            </button>
+            <button onclick="setPassportCount(12)" class="passport-qty-btn border py-2 rounded-xl transition bg-slate-100 hover:bg-amber-50 border-slate-300" data-count="12">
+              12 फोटो (2 लाइन)
+            </button>
+            <button onclick="setPassportCount(18)" class="passport-qty-btn border py-2 rounded-xl transition bg-slate-100 hover:bg-amber-50 border-slate-300" data-count="18">
+              18 फोटो (3 लाइन)
+            </button>
+            <button onclick="setPassportCount(30)" class="passport-qty-btn border py-2 rounded-xl transition bg-slate-100 hover:bg-amber-50 border-slate-300" data-count="30">
+              30 फोटो (पूरा पेज)
+            </button>
+          </div>
+        </div>
+
+        <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" id="passport-border-check" checked onchange="togglePassportBorder(this.checked)" class="rounded text-amber-500 focus:ring-amber-400">
+            <span>ब्लैक कटिंग बॉर्डर (Cutting Outline)</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- ================= SECTION 3: FULL DOCUMENT ================= -->
+      <div id="section-document" class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-5 space-y-4 hidden">
+        <div class="flex items-center justify-between border-b pb-2.5">
+          <h2 class="font-bold text-slate-800 text-sm sm:text-base flex items-center gap-2">
+            <span class="w-2.5 h-2.5 bg-blue-600 rounded-full"></span>
+            फुल पेज दस्तावेज (A4 Document)
+          </h2>
+          <span class="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-mono font-medium">मार्कशीट / फॉर्म / रसीद</span>
+        </div>
+
+        <div id="document-dropzone" class="dashed-border rounded-xl p-5 text-center bg-slate-50 hover:bg-blue-50/40 transition cursor-pointer relative group">
+          <input type="file" id="document-input" accept="image/*" class="hidden" onchange="handleFileSelect(event, 'document')">
+          <div id="document-placeholder" class="py-5 flex flex-col items-center justify-center">
+            <i class="fa-solid fa-file-invoice text-3xl text-blue-500 group-hover:scale-110 transition"></i>
+            <p class="text-xs font-semibold text-slate-700 mt-2">दस्तावेज यहाँ अपलोड या Ctrl+V से पेस्ट करें</p>
+            <p class="text-[10px] text-slate-400 mt-0.5">A4 साइज में ऑटो-फिट प्रिंट होगा</p>
+          </div>
+          <div id="document-preview-container" class="hidden relative">
+            <img id="document-preview-thumb" src="" alt="Doc Preview" class="h-32 mx-auto rounded object-contain shadow border">
+            <div class="mt-2.5 flex justify-center gap-2">
+              <button onclick="openEditor('document')" class="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 flex items-center gap-1 shadow-sm font-medium">
+                <i class="fa-solid fa-crop-simple"></i> क्रॉप व रोटेट करें
+              </button>
+              <button onclick="removeImage('document')" class="text-xs bg-rose-50 text-rose-600 px-3 py-1.5 rounded-lg hover:bg-rose-100 flex items-center gap-1 border border-rose-200 font-medium">
+                <i class="fa-solid fa-trash"></i> हटाएं
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="text-xs space-y-2 pt-2 border-t">
+          <label class="block font-medium text-slate-700">प्रिंट फिटिंग (Fit Mode):</label>
+          <div class="grid grid-cols-2 gap-2">
+            <button onclick="setDocFit('contain')" id="btn-fit-contain" class="py-1.5 px-2 rounded-lg border bg-blue-50 border-blue-400 text-blue-700 font-medium text-xs">
+              पूरा पेज दिखे (Fit Page)
+            </button>
+            <button onclick="setDocFit('fill')" id="btn-fit-fill" class="py-1.5 px-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-xs">
+              मार्जिन से मार्जिन (Stretch Fill)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Tips Helper Card -->
+      <div class="bg-indigo-50/80 border border-indigo-200 rounded-2xl p-4 text-xs text-indigo-950 space-y-2">
+        <div class="font-bold flex items-center gap-1.5 text-indigo-800">
+          <i class="fa-solid fa-lightbulb text-amber-500 text-sm"></i> प्रिंट नहीं निकल रहा तो क्या करें?
+        </div>
+        <ul class="list-disc pl-4 space-y-1 text-indigo-900/90 text-[11px]">
+          <li>अगर "डायरेक्ट प्रिंट" बटन दबाने पर प्रिंटर डायलॉग न खुले, तो ऊपर नीले रंग के <b>"नए टैब में प्रिंट करें"</b> बटन पर क्लिक करें।</li>
+          <li>नया टैब खुलते ही अपने आप प्रिंट डायलॉग खुल जाएगा।</li>
+          <li>WhatsApp की डार्क या तिरछी फोटो को साफ करने के लिए <b>"क्रॉप व सीधा करें"</b> जरूर दबाएं।</li>
+        </ul>
+      </div>
+
+    </div>
+
+    <!-- RIGHT PANEL: Live A4 Visual Preview -->
+    <div class="lg:col-span-7 flex flex-col items-center">
+      
+      <!-- Top Action Bar -->
+      <div class="w-full flex justify-between items-center mb-3 bg-white p-3 rounded-2xl border border-slate-200 shadow-sm">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+            <i class="fa-solid fa-file-pdf text-indigo-600"></i> A4 लाइव शीट प्रीव्यू
+          </span>
+          <span class="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-mono">100% Scale</span>
+        </div>
+        
+        <div class="flex items-center gap-2">
+          <button onclick="triggerDirectPrint()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 shadow-sm">
+            <i class="fa-solid fa-print"></i> प्रिंट करें
+          </button>
+          <button onclick="openPrintWindow()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 shadow-sm">
+            <i class="fa-solid fa-arrow-up-right-from-square"></i> नया टैब
+          </button>
+        </div>
+      </div>
+
+      <!-- Preview Viewport -->
+      <div class="w-full overflow-auto bg-slate-300/70 p-3 sm:p-6 rounded-2xl border border-slate-300 flex justify-center max-h-[800px]">
+        
+        <!-- The Printable A4 Sheet -->
+        <div id="print-area" class="a4-sheet-preview font-sans select-none">
+          
+          <!-- ID Card A4 View -->
+          <div id="preview-idcard" class="h-full flex flex-col">
+            <div class="no-print text-center mb-4 pb-2 border-b border-dashed border-slate-300">
+              <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">A4 टॉप मार्जिन (कटिंग और लेमिनेशन साइज: 85.6mm × 54mm)</span>
+            </div>
+
+            <div id="idcard-render-container" class="flex flex-row flex-wrap items-start gap-4">
+              <!-- Front Card -->
+              <div id="id-front-card" class="relative group">
+                <div class="id-card-box bg-slate-50 rounded border border-dashed border-slate-400 flex items-center justify-center overflow-hidden id-card-wrapper">
+                  <img id="print-front-img" src="" class="hidden w-full h-full object-fill block" alt="Front ID Card">
+                  <div id="print-front-empty" class="text-center p-3 text-slate-300 flex flex-col items-center">
+                    <i class="fa-solid fa-id-card text-3xl mb-1 text-slate-300"></i>
+                    <span class="text-xs font-medium text-slate-500">Front Side यहाँ आएगा</span>
+                    <span class="text-[10px] text-slate-400">Ctrl + V करें</span>
+                  </div>
+                </div>
+                <div class="no-print text-[10px] text-slate-400 text-center mt-1">Front (85.6 × 54 mm)</div>
+              </div>
+
+              <!-- Back Card -->
+              <div id="id-back-card" class="relative group">
+                <div class="id-card-box bg-slate-50 rounded border border-dashed border-slate-400 flex items-center justify-center overflow-hidden id-card-wrapper">
+                  <img id="print-back-img" src="" class="hidden w-full h-full object-fill block" alt="Back ID Card">
+                  <div id="print-back-empty" class="text-center p-3 text-slate-300 flex flex-col items-center">
+                    <i class="fa-solid fa-id-card text-3xl mb-1 text-slate-300"></i>
+                    <span class="text-xs font-medium text-slate-500">Back Side यहाँ आएगा</span>
+                    <span class="text-[10px] text-slate-400">Ctrl + V करें</span>
+                  </div>
+                </div>
+                <div class="no-print text-[10px] text-slate-400 text-center mt-1">Back (85.6 × 54 mm)</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Passport Photos A4 View -->
+          <div id="preview-passport" class="hidden">
+            <div class="no-print text-center mb-4 pb-2 border-b border-dashed border-slate-300">
+              <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">पासपोर्ट फोटो ग्रिड (35mm × 45mm स्टैंडर्ड साइज)</span>
+            </div>
+
+            <div id="passport-grid-container" class="flex flex-wrap gap-2.5 items-start justify-start">
+              <!-- Rendered passport items -->
+            </div>
+
+            <div id="passport-empty-state" class="text-center py-20 text-slate-300">
+              <i class="fa-regular fa-images text-5xl mb-2 text-slate-300"></i>
+              <p class="text-sm font-medium text-slate-500">कृपया बाईं तरफ पासपोर्ट फोटो अपलोड या Ctrl+V करें</p>
+              <p class="text-xs text-slate-400 mt-1">4, 6, 8, 12 या 30 फोटो 1-क्लिक में तैयार हो जाएगी</p>
+            </div>
+          </div>
+
+          <!-- Document A4 View -->
+          <div id="preview-document" class="hidden h-full flex flex-col items-center justify-start">
+            <div id="doc-render-box" class="w-full flex justify-center">
+              <img id="print-doc-img" src="" class="max-w-full max-h-[260mm] object-contain hidden border border-slate-300 block" alt="Document Print">
+              <div id="doc-empty-state" class="text-center py-32 text-slate-300">
+                <i class="fa-solid fa-file-invoice text-5xl mb-3 text-slate-300"></i>
+                <p class="text-sm font-medium text-slate-500">कोई दस्तावेज अपलोड नहीं है</p>
+                <p class="text-xs text-slate-400 mt-1">WhatsApp से कॉपी करके Ctrl + V दबाएं</p>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Image Cropper & Enhancer Modal -->
+  <div id="editor-modal" class="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-6 no-print">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-4xl w-full flex flex-col max-h-[95vh] overflow-hidden border border-slate-200">
+      
+      <div class="px-5 py-3.5 bg-slate-900 text-white flex justify-between items-center">
+        <div class="flex items-center gap-2">
+          <i class="fa-solid fa-wand-magic-sparkles text-amber-400 text-base"></i>
+          <h3 class="font-bold text-sm sm:text-base tracking-wide" id="modal-title">इमेज क्रॉप व सुधारें (Edit Image)</h3>
+        </div>
+        <button onclick="closeEditor()" class="text-slate-400 hover:text-white text-2xl leading-none px-2">&times;</button>
+      </div>
+
+      <div class="flex-1 bg-slate-950 p-2 sm:p-4 flex items-center justify-center overflow-hidden min-h-[320px] max-h-[50vh]">
+        <div class="w-full h-full flex items-center justify-center">
+          <img id="cropper-target" src="" class="max-h-full max-w-full block" alt="Edit Target">
+        </div>
+      </div>
+
+      <div class="p-4 bg-slate-50 border-t border-slate-200 space-y-4">
+        <!-- Sliders -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-medium text-slate-700">
+          <div>
+            <div class="flex justify-between mb-1">
+              <span class="flex items-center gap-1.5"><i class="fa-solid fa-sun text-amber-500"></i> ब्राइटनेस (Brightness):</span>
+              <span id="val-brightness" class="font-mono text-indigo-600">100%</span>
+            </div>
+            <input type="range" id="slider-brightness" min="60" max="170" value="100" class="w-full accent-indigo-600 cursor-pointer" oninput="applyFilterPreview()">
+          </div>
+
+          <div>
+            <div class="flex justify-between mb-1">
+              <span class="flex items-center gap-1.5"><i class="fa-solid fa-circle-half-stroke text-slate-700"></i> कंट्रास्ट (Contrast):</span>
+              <span id="val-contrast" class="font-mono text-indigo-600">100%</span>
+            </div>
+            <input type="range" id="slider-contrast" min="60" max="170" value="100" class="w-full accent-indigo-600 cursor-pointer" oninput="applyFilterPreview()">
+          </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200/80">
+          <div class="flex items-center gap-1.5 text-xs">
+            <span class="text-slate-500 mr-1">रोटेट:</span>
+            <button onclick="rotateCropper(-90)" class="p-2 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 shadow-sm font-medium">
+              <i class="fa-solid fa-rotate-left"></i> 90°
+            </button>
+            <button onclick="rotateCropper(90)" class="p-2 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 shadow-sm font-medium">
+              <i class="fa-solid fa-rotate-right"></i> 90°
+            </button>
+            
+            <span class="text-slate-500 ml-2 mr-1">आस्पेक्ट:</span>
+            <button onclick="setCropperRatio('free')" class="px-2 py-1 rounded bg-white border border-slate-300 hover:bg-slate-100 text-xs">फ्री</button>
+            <button onclick="setCropperRatio('card')" class="px-2 py-1 rounded bg-white border border-slate-300 hover:bg-slate-100 text-xs">कार्ड (CR80)</button>
+            <button onclick="setCropperRatio('passport')" class="px-2 py-1 rounded bg-white border border-slate-300 hover:bg-slate-100 text-xs">पासपोर्ट</button>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <button onclick="closeEditor()" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-200 transition">
+              रद्द करें
+            </button>
+            <button onclick="saveCroppedImage()" class="px-5 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow transition flex items-center gap-1.5">
+              <i class="fa-solid fa-check"></i> क्रॉप सेव करें
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-xs pointer-events-none no-print">
+    <div id="toast-icon" class="text-emerald-400 text-base"><i class="fa-solid fa-circle-check"></i></div>
+    <div id="toast-message" class="font-medium">फोटो लोड हो गई!</div>
+  </div>
+
+  <!-- Hidden iframe for completely foolproof printing -->
+  <iframe id="print-iframe" class="hidden no-print" style="position:fixed; width:0; height:0; border:0; left:-9999px;"></iframe>
+
+  <script>
+    // State
+    let currentMode = 'idcard'; // 'idcard' | 'passport' | 'document'
+    let currentEditorTarget = null; // 'front' | 'back' | 'passport' | 'document'
+    let cropperInstance = null;
+
+    const imageStore = {
+      front: null,
+      back: null,
+      passport: null,
+      document: null
+    };
+
+    let passportCount = 6;
+    let passportBorder = true;
+    let idLayout = 'horizontal';
+    let idBorder = true;
+    let docFit = 'contain';
+
+    window.addEventListener('DOMContentLoaded', () => {
+      setupDropzones();
+      setupPasteListener();
+      updatePassportGrid();
+    });
+
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toast');
+      const msgElem = document.getElementById('toast-message');
+      const iconElem = document.getElementById('toast-icon');
+
+      msgElem.innerText = message;
+      if (type === 'success') {
+        iconElem.innerHTML = '<i class="fa-solid fa-circle-check text-emerald-400"></i>';
+      } else if (type === 'info') {
+        iconElem.innerHTML = '<i class="fa-solid fa-circle-info text-sky-400"></i>';
+      } else {
+        iconElem.innerHTML = '<i class="fa-solid fa-circle-exclamation text-amber-400"></i>';
+      }
+
+      toast.classList.remove('translate-y-20', 'opacity-0');
+      setTimeout(() => {
+        toast.classList.add('translate-y-20', 'opacity-0');
+      }, 3500);
+    }
+
+    // Global Clipboard Paste Listener (Ctrl+V)
+    function setupPasteListener() {
+      window.addEventListener('paste', (e) => {
+        const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+        let imageFound = false;
+
+        for (const item of items) {
+          if (item.type.indexOf('image') !== -1) {
+            imageFound = true;
+            const file = item.getAsFile();
+            const reader = new FileReader();
+
+            reader.onload = (event) => {
+              autoAssignPastedImage(event.target.result);
+            };
+            reader.readAsDataURL(file);
+            break;
+          }
+        }
+
+        if (imageFound) {
+          e.preventDefault();
+        }
+      });
+    }
+
+    function autoAssignPastedImage(dataUrl) {
+      if (currentMode === 'idcard') {
+        if (!imageStore.front) {
+          loadImageData('front', dataUrl);
+          showToast('Front Side फोटो पेस्ट हो गई! अब Back पेस्ट करें।', 'success');
+        } else if (!imageStore.back) {
+          loadImageData('back', dataUrl);
+          showToast('Back Side फोटो पेस्ट हो गई! अब सीधे प्रिंट कर सकते हैं।', 'success');
+        } else {
+          loadImageData('front', dataUrl);
+          showToast('Front Side फोटो रिप्लेस हो गई!', 'info');
+        }
+      } else if (currentMode === 'passport') {
+        loadImageData('passport', dataUrl);
+        showToast('पासपोर्ट फोटो लोड हो गई! "क्रॉप" पर क्लिक करके एडजस्ट करें।', 'success');
+      } else if (currentMode === 'document') {
+        loadImageData('document', dataUrl);
+        showToast('दस्तावेज लोड हो गया!', 'success');
+      }
+    }
+
+    function setupDropzones() {
+      const dropzones = [
+        { zone: 'front-dropzone', input: 'front-input' },
+        { zone: 'back-dropzone', input: 'back-input' },
+        { zone: 'passport-dropzone', input: 'passport-input' },
+        { zone: 'document-dropzone', input: 'document-input' }
+      ];
+
+      dropzones.forEach(({ zone, input }) => {
+        const zElem = document.getElementById(zone);
+        const iElem = document.getElementById(input);
+        if (zElem && iElem) {
+          zElem.addEventListener('click', (e) => {
+            if (e.target.tagName !== 'BUTTON' && !e.target.closest('button')) {
+              iElem.click();
+            }
+          });
+        }
+      });
+    }
+
+    function handleFileSelect(event, target) {
+      const file = event.target.files[0];
+      if (file && file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          loadImageData(target, e.target.result);
+          showToast('फोटो सफलतापूर्वक लोड हो गई!', 'success');
+        };
+        reader.readAsDataURL(file);
+      }
+      event.target.value = '';
+    }
+
+    function loadImageData(target, dataUrl) {
+      imageStore[target] = dataUrl;
+
+      const thumb = document.getElementById(`${target}-preview-thumb`);
+      const placeholder = document.getElementById(`${target}-placeholder`);
+      const container = document.getElementById(`${target}-preview-container`);
+      const status = document.getElementById(`${target}-status`);
+
+      if (thumb && placeholder && container) {
+        thumb.src = dataUrl;
+        placeholder.classList.add('hidden');
+        container.classList.remove('hidden');
+      }
+      if (status) {
+        status.innerText = 'अपलोड हो गया ✓';
+        status.className = 'text-emerald-600 font-semibold text-xs';
+      }
+
+      if (target === 'front') {
+        const pFront = document.getElementById('print-front-img');
+        const eFront = document.getElementById('print-front-empty');
+        pFront.src = dataUrl;
+        pFront.classList.remove('hidden');
+        eFront.classList.add('hidden');
+      } else if (target === 'back') {
+        const pBack = document.getElementById('print-back-img');
+        const eBack = document.getElementById('print-back-empty');
+        pBack.src = dataUrl;
+        pBack.classList.remove('hidden');
+        eBack.classList.add('hidden');
+      } else if (target === 'passport') {
+        updatePassportGrid();
+      } else if (target === 'document') {
+        const pDoc = document.getElementById('print-doc-img');
+        const eDoc = document.getElementById('doc-empty-state');
+        pDoc.src = dataUrl;
+        pDoc.classList.remove('hidden');
+        eDoc.classList.add('hidden');
+      }
+    }
+
+    function removeImage(target) {
+      imageStore[target] = null;
+      const thumb = document.getElementById(`${target}-preview-thumb`);
+      const placeholder = document.getElementById(`${target}-placeholder`);
+      const container = document.getElementById(`${target}-preview-container`);
+      const status = document.getElementById(`${target}-status`);
+
+      if (thumb && placeholder && container) {
+        thumb.src = '';
+        placeholder.classList.remove('hidden');
+        container.classList.add('hidden');
+      }
+      if (status) {
+        status.innerText = 'खाली है';
+        status.className = 'text-slate-400 font-normal text-xs';
+      }
+
+      if (target === 'front') {
+        const pFront = document.getElementById('print-front-img');
+        const eFront = document.getElementById('print-front-empty');
+        pFront.src = '';
+        pFront.classList.add('hidden');
+        eFront.classList.remove('hidden');
+      } else if (target === 'back') {
+        const pBack = document.getElementById('print-back-img');
+        const eBack = document.getElementById('print-back-empty');
+        pBack.src = '';
+        pBack.classList.add('hidden');
+        eBack.classList.remove('hidden');
+      } else if (target === 'passport') {
+        updatePassportGrid();
+      } else if (target === 'document') {
+        const pDoc = document.getElementById('print-doc-img');
+        const eDoc = document.getElementById('doc-empty-state');
+        pDoc.src = '';
+        pDoc.classList.add('hidden');
+        eDoc.classList.remove('hidden');
+      }
+      showToast('फोटो हटा दी गई', 'info');
+    }
+
+    function resetIdCards() {
+      removeImage('front');
+      removeImage('back');
+      showToast('कार्ड रीसेट कर दिए गए', 'info');
+    }
+
+    function switchMode(mode) {
+      currentMode = mode;
+      const tabs = ['idcard', 'passport', 'document'];
+      tabs.forEach(t => {
+        const btn = document.getElementById(`tab-${t}`);
+        const sec = document.getElementById(`section-${t}`);
+        const prev = document.getElementById(`preview-${t}`);
+        
+        if (t === mode) {
+          btn.className = 'py-2.5 px-2 rounded-xl transition bg-indigo-600 text-white shadow font-semibold';
+          sec.classList.remove('hidden');
+          prev.classList.remove('hidden');
+        } else {
+          btn.className = 'py-2.5 px-2 rounded-xl transition text-slate-600 hover:bg-slate-100 font-medium';
+          sec.classList.add('hidden');
+          prev.classList.add('hidden');
+        }
+      });
+    }
+
+    function updateIdLayout(layout) {
+      idLayout = layout;
+      const container = document.getElementById('idcard-render-container');
+      if (layout === 'horizontal') {
+        container.className = 'flex flex-row flex-wrap items-start gap-4';
+      } else {
+        container.className = 'flex flex-col items-start gap-4';
+      }
+    }
+
+    function toggleIdBorder(checked) {
+      idBorder = checked;
+      const wrappers = document.querySelectorAll('.id-card-wrapper');
+      wrappers.forEach(w => {
+        if (checked) {
+          w.classList.add('border', 'border-dashed', 'border-slate-400');
+          w.classList.remove('border-0');
+        } else {
+          w.classList.remove('border', 'border-dashed', 'border-slate-400');
+          w.classList.add('border-0');
+        }
+      });
+    }
+
+    function setPassportCount(count) {
+      passportCount = count;
+      document.querySelectorAll('.passport-qty-btn').forEach(b => {
+        const bCount = parseInt(b.getAttribute('data-count'), 10);
+        if (bCount === count) {
+          b.className = 'passport-qty-btn border py-2 rounded-xl transition bg-amber-500 text-white border-amber-600 shadow-sm font-semibold';
+        } else {
+          b.className = 'passport-qty-btn border py-2 rounded-xl transition bg-slate-100 hover:bg-amber-50 border-slate-300 text-slate-700 font-medium';
+        }
+      });
+      updatePassportGrid();
+    }
+
+    function togglePassportBorder(checked) {
+      passportBorder = checked;
+      updatePassportGrid();
+    }
+
+    function updatePassportGrid() {
+      const grid = document.getElementById('passport-grid-container');
+      const empty = document.getElementById('passport-empty-state');
+      grid.innerHTML = '';
+
+      if (!imageStore.passport) {
+        grid.classList.add('hidden');
+        empty.classList.remove('hidden');
+        return;
+      }
+
+      grid.classList.remove('hidden');
+      empty.classList.add('hidden');
+
+      const borderClass = passportBorder ? 'border border-slate-600' : '';
+
+      for (let i = 0; i < passportCount; i++) {
+        const item = document.createElement('div');
+        item.className = `passport-box bg-white overflow-hidden relative ${borderClass}`;
+        item.innerHTML = `<img src="${imageStore.passport}" class="w-full h-full object-cover block" alt="Passport">`;
+        grid.appendChild(item);
+      }
+    }
+
+    function setDocFit(mode) {
+      docFit = mode;
+      const btnContain = document.getElementById('btn-fit-contain');
+      const btnFill = document.getElementById('btn-fit-fill');
+      const img = document.getElementById('print-doc-img');
+
+      if (mode === 'contain') {
+        btnContain.className = 'py-1.5 px-2 rounded-lg border bg-blue-50 border-blue-400 text-blue-700 font-medium text-xs';
+        btnFill.className = 'py-1.5 px-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-xs';
+        img.classList.remove('w-full', 'h-full', 'object-fill');
+        img.classList.add('object-contain', 'max-w-full', 'max-h-[260mm]');
+      } else {
+        btnFill.className = 'py-1.5 px-2 rounded-lg border bg-blue-50 border-blue-400 text-blue-700 font-medium text-xs';
+        btnContain.className = 'py-1.5 px-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-xs';
+        img.classList.remove('object-contain', 'max-h-[260mm]');
+        img.classList.add('w-full', 'h-full', 'object-fill');
+      }
+    }
+
+    // Modal Cropper Handlers
+    function openEditor(target) {
+      if (!imageStore[target]) {
+        showToast('पहले फोटो अपलोड या पेस्ट करें!', 'warning');
+        return;
+      }
+
+      currentEditorTarget = target;
+      const modal = document.getElementById('editor-modal');
+      const targetImg = document.getElementById('cropper-target');
+      const modalTitle = document.getElementById('modal-title');
+
+      if (target === 'front') modalTitle.innerText = 'आधार / पैन कार्ड (Front) क्रॉप व साफ करें';
+      else if (target === 'back') modalTitle.innerText = 'आधार / कार्ड (Back) क्रॉप व साफ करें';
+      else if (target === 'passport') modalTitle.innerText = 'पासपोर्ट साइज फोटो क्रॉप व साफ करें';
+      else modalTitle.innerText = 'दस्तावेज क्रॉप व सीधा करें';
+
+      document.getElementById('slider-brightness').value = 100;
+      document.getElementById('slider-contrast').value = 100;
+      document.getElementById('val-brightness').innerText = '100%';
+      document.getElementById('val-contrast').innerText = '100%';
+
+      targetImg.src = imageStore[target];
+      modal.classList.remove('hidden');
+
+      if (cropperInstance) {
+        cropperInstance.destroy();
+      }
+
+      setTimeout(() => {
+        let initialAspect = NaN;
+        if (target === 'front' || target === 'back') {
+          initialAspect = 85.6 / 54;
+        } else if (target === 'passport') {
+          initialAspect = 35 / 45;
+        }
+
+        cropperInstance = new Cropper(targetImg, {
+          aspectRatio: initialAspect,
+          viewMode: 1,
+          autoCropArea: 0.95,
+          responsive: true,
+          guides: true,
+          center: true,
+          background: false
+        });
+      }, 100);
+    }
+
+    function closeEditor() {
+      const modal = document.getElementById('editor-modal');
+      modal.classList.add('hidden');
+      if (cropperInstance) {
+        cropperInstance.destroy();
+        cropperInstance = null;
+      }
+    }
+
+    function rotateCropper(degree) {
+      if (cropperInstance) {
+        cropperInstance.rotate(degree);
+      }
+    }
+
+    function setCropperRatio(type) {
+      if (!cropperInstance) return;
+      if (type === 'free') {
+        cropperInstance.setAspectRatio(NaN);
+      } else if (type === 'card') {
+        cropperInstance.setAspectRatio(85.6 / 54);
+      } else if (type === 'passport') {
+        cropperInstance.setAspectRatio(35 / 45);
+      }
+    }
+
+    function applyFilterPreview() {
+      const b = document.getElementById('slider-brightness').value;
+      const c = document.getElementById('slider-contrast').value;
+      document.getElementById('val-brightness').innerText = `${b}%`;
+      document.getElementById('val-contrast').innerText = `${c}%`;
+
+      const cropperCanvas = document.querySelector('.cropper-container');
+      if (cropperCanvas) {
+        cropperCanvas.style.filter = `brightness(${b}%) contrast(${c}%)`;
+      }
+    }
+
+    function saveCroppedImage() {
+      if (!cropperInstance || !currentEditorTarget) return;
+
+      const croppedCanvas = cropperInstance.getCroppedCanvas({
+        imageSmoothingQuality: 'high',
+        imageSmoothingEnabled: true
+      });
+
+      if (!croppedCanvas) {
+        showToast('क्रॉप प्रक्रिया में त्रुटि!', 'warning');
+        return;
+      }
+
+      const bVal = document.getElementById('slider-brightness').value;
+      const cVal = document.getElementById('slider-contrast').value;
+
+      const finalCanvas = document.createElement('canvas');
+      finalCanvas.width = croppedCanvas.width;
+      finalCanvas.height = croppedCanvas.height;
+      const ctx = finalCanvas.getContext('2d');
+
+      ctx.filter = `brightness(${bVal}%) contrast(${cVal}%)`;
+      ctx.drawImage(croppedCanvas, 0, 0);
+
+      const enhancedDataUrl = finalCanvas.toDataURL('image/jpeg', 0.95);
+      loadImageData(currentEditorTarget, enhancedDataUrl);
+
+      closeEditor();
+      showToast('फोटो सफलतापूर्वक अपडेट हो गई!', 'success');
+    }
+
+    // Check if there is anything to print
+    function validatePrintData() {
+      if (currentMode === 'idcard' && !imageStore.front && !imageStore.back) {
+        showToast('कृपया पहले आधार / कार्ड की फोटो पेस्ट या अपलोड करें!', 'warning');
+        return false;
+      }
+      if (currentMode === 'passport' && !imageStore.passport) {
+        showToast('कृपया पहले पासपोर्ट फोटो पेस्ट या अपलोड करें!', 'warning');
+        return false;
+      }
+      if (currentMode === 'document' && !imageStore.document) {
+        showToast('कृपया पहले कोई दस्तावेज अपलोड करें!', 'warning');
+        return false;
+      }
+      return true;
+    }
+
+    // STRATEGY 1: Direct Browser Print with iframe detection and focus
+    function triggerDirectPrint() {
+      if (!validatePrintData()) return;
+
+      // Ensure window is active and focused (resolves iframe capture issues)
+      window.focus();
+
+      try {
+        // Direct print trigger
+        window.print();
+      } catch (err) {
+        console.warn('Direct print failed, falling back to popup print window...', err);
+        openPrintWindow();
+      }
+    }
+
+    // STRATEGY 2: Bulletproof Standalone Print Window (100% Works in All Browsers & iFrames)
+    function openPrintWindow() {
+      if (!validatePrintData()) return;
+
+      // Generate pristine standalone printable HTML
+      let contentHtml = '';
+
+      if (currentMode === 'idcard') {
+        const layoutFlex = idLayout === 'horizontal' ? 'display: flex; flex-direction: row; gap: 15mm;' : 'display: flex; flex-direction: column; gap: 15mm;';
+        const borderStyle = idBorder ? 'border: 1px dashed #64748b;' : 'border: none;';
+
+        contentHtml = `
+          <div style="${layoutFlex} align-items: flex-start;">
+            ${imageStore.front ? `
+              <div style="width: 85.6mm; height: 54mm; ${borderStyle} overflow: hidden; box-sizing: border-box;">
+                <img src="${imageStore.front}" style="width: 85.6mm; height: 54mm; object-fit: fill; display: block;" />
+              </div>` : ''}
+            ${imageStore.back ? `
+              <div style="width: 85.6mm; height: 54mm; ${borderStyle} overflow: hidden; box-sizing: border-box;">
+                <img src="${imageStore.back}" style="width: 85.6mm; height: 54mm; object-fit: fill; display: block;" />
+              </div>` : ''}
+          </div>
+        `;
+      } else if (currentMode === 'passport') {
+        const borderStyle = passportBorder ? 'border: 0.8px solid #334155;' : 'border: none;';
+        let photosHtml = '';
+        for (let i = 0; i < passportCount; i++) {
+          photosHtml += `
+            <div style="width: 35mm; height: 45mm; ${borderStyle} overflow: hidden; box-sizing: border-box; background: #fff;">
+              <img src="${imageStore.passport}" style="width: 35mm; height: 45mm; object-fit: cover; display: block;" />
+            </div>
+          `;
+        }
+        contentHtml = `
+          <div style="display: flex; flex-wrap: wrap; gap: 4mm; align-items: flex-start;">
+            ${photosHtml}
+          </div>
+        `;
+      } else if (currentMode === 'document') {
+        const fitStyle = docFit === 'contain' ? 'max-width: 100%; max-height: 270mm; object-fit: contain;' : 'width: 100%; height: 270mm; object-fit: fill;';
+        contentHtml = `
+          <div style="width: 100%; display: flex; justify-content: center;">
+            <img src="${imageStore.document}" style="${fitStyle} display: block;" />
+          </div>
+        `;
+      }
+
+      const printPageHtml = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>प्रिंट प्रीव्यू - जन सेवा केंद्र</title>
+          <style>
+            @page {
+              size: A4 portrait;
+              margin: 8mm;
+            }
+            body {
+              margin: 0;
+              padding: 5mm;
+              background: #fff;
+              font-family: sans-serif;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+            .header-bar {
+              background: #f1f5f9;
+              padding: 10px 15px;
+              margin-bottom: 15px;
+              border-radius: 8px;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              font-size: 13px;
+              color: #334155;
+            }
+            .print-btn {
+              background: #059669;
+              color: white;
+              padding: 8px 18px;
+              border-radius: 6px;
+              border: none;
+              font-weight: bold;
+              cursor: pointer;
+              font-size: 14px;
+            }
+            @media print {
+              .no-print {
+                display: none !important;
+              }
+              body {
+                padding: 0 !important;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="no-print header-bar">
+            <span>🖨️ <b>Jan Seva Kendra Quick Print Ready</b> (Paper: A4 | Scale: 100%)</span>
+            <button class="print-btn" onclick="window.print()">यहाँ क्लिक करके प्रिंट करें</button>
+          </div>
+          <div>
+            ${contentHtml}
+          </div>
+          <script>
+            window.onload = function() {
+              setTimeout(function() {
+                window.focus();
+                window.print();
+              }, 400);
+            };
+          <\/script>
+        </body>
+        </html>
+      `;
+
+      // Open new window or populate iframe
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.open();
+        printWindow.document.write(printPageHtml);
+        printWindow.document.close();
+      } else {
+        // In case pop-up blocker caught it, use internal iframe fallback
+        const iframe = document.getElementById('print-iframe');
+        const doc = iframe.contentWindow.document;
+        doc.open();
+        doc.write(printPageHtml);
+        doc.close();
+        setTimeout(() => {
+          iframe.contentWindow.focus();
+          iframe.contentWindow.print();
+        }, 500);
+      }
+    }
+
+    // STRATEGY 3: Export Clean High-Res Image for offline photo printing
+    function downloadSheetImage() {
+      if (!validatePrintData()) return;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = 1240; // High resolution ~150 DPI A4
+      canvas.height = 1754;
+      const ctx = canvas.getContext('2d');
+
+      // White A4 sheet background
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      let loadedImages = 0;
+
+      if (currentMode === 'idcard') {
+        const fImg = new Image();
+        const bImg = new Image();
+
+        const drawCards = () => {
+          const cardW = 505; // 85.6mm proportional
+          const cardH = 319; // 54mm proportional
+
+          if (idLayout === 'horizontal') {
+            if (imageStore.front) ctx.drawImage(fImg, 60, 80, cardW, cardH);
+            if (imageStore.back) ctx.drawImage(bImg, 590, 80, cardW, cardH);
+          } else {
+            if (imageStore.front) ctx.drawImage(fImg, 60, 80, cardW, cardH);
+            if (imageStore.back) ctx.drawImage(bImg, 60, 430, cardW, cardH);
+          }
+
+          downloadCanvas(canvas, 'Aadhaar_ID_Print.png');
+        };
+
+        if (imageStore.front) {
+          fImg.onload = () => {
+            if (!imageStore.back) drawCards();
+          };
+          fImg.src = imageStore.front;
+        }
+
+        if (imageStore.back) {
+          bImg.onload = () => {
+            drawCards();
+          };
+          bImg.src = imageStore.back;
+        }
+      } else if (currentMode === 'passport') {
+        const pImg = new Image();
+        pImg.onload = () => {
+          const pw = 206; // 35mm proportional
+          const ph = 265; // 45mm proportional
+          const gap = 25;
+          const startX = 60;
+          let currentX = startX;
+          let currentY = 80;
+
+          for (let i = 0; i < passportCount; i++) {
+            ctx.drawImage(pImg, currentX, currentY, pw, ph);
+            if (passportBorder) {
+              ctx.strokeStyle = '#334155';
+              ctx.lineWidth = 1;
+              ctx.strokeRect(currentX, currentY, pw, ph);
+            }
+            currentX += pw + gap;
+            if (currentX + pw > canvas.width - 60) {
+              currentX = startX;
+              currentY += ph + gap;
+            }
+          }
+          downloadCanvas(canvas, 'Passport_Photos_Print.png');
+        };
+        pImg.src = imageStore.passport;
+      } else if (currentMode === 'document') {
+        const dImg = new Image();
+        dImg.onload = () => {
+          ctx.drawImage(dImg, 50, 50, canvas.width - 100, canvas.height - 100);
+          downloadCanvas(canvas, 'Document_A4_Print.png');
+        };
+        dImg.src = imageStore.document;
+      }
+    }
+
+    function downloadCanvas(canvas, filename) {
+      const link = document.createElement('a');
+      link.download = filename;
+      link.href = canvas.toDataURL('image/png');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast('प्रिंट फाइल डाउनलोड हो गई!', 'success');
+    }
+
+    // Keyboard shortcut for Print (Ctrl + P)
+    window.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        triggerDirectPrint();
+      }
+    });
+  </script>
+</body>
+</html>
